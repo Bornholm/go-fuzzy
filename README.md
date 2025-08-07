@@ -174,6 +174,71 @@ multiModal := fuzzy.Max(
 )
 ```
 
-## License
+## Domain-Specific Language (DSL) for Rules
+
+This library includes a DSL parser that allows you to define fuzzy rules using a simple text-based format instead of programmatic construction. This makes rule creation more intuitive and readable.
+
+### Basic Syntax
+
+The basic syntax for a rule is:
+
+```
+IF [variable] IS [term] THEN [variable] IS [term];
+```
+
+Example:
+
+```
+IF temperature IS hot THEN ac_mode IS cooling;
+```
+
+### Logical Operators
+
+The DSL supports logical operators for complex conditions:
+
+- `AND` - All conditions must be true
+- `OR` - At least one condition must be true
+- `NOT` - Negates the condition
+- Parentheses `(` and `)` - For grouping expressions
+
+Examples:
+
+```
+IF temperature IS hot AND humidity IS high THEN ac_mode IS cooling;
+IF temperature IS cold OR humidity IS low THEN ac_mode IS heating;
+IF NOT temperature IS hot THEN ac_mode IS heating;
+IF (temperature IS cold OR humidity IS high) AND NOT pressure IS low THEN ac_mode IS heating;
+```
+
+### Usage Example
+
+Here's how to use the DSL parser:
+
+```go
+// Define rules using the DSL
+script := `
+IF temperature IS cold THEN ac_mode IS heating;
+IF temperature IS comfortable THEN ac_mode IS off;
+IF temperature IS hot THEN ac_mode IS cooling;
+`
+
+// Parse the rules
+rules, err := dsl.ParseRules(script)
+if err != nil {
+  panic(err)
+}
+
+// Add the parsed rules to the engine
+engine.Rules(rules...)
+```
+
+Alternatively, you can use `ParseRulesOrPanic` which will panic on parsing errors:
+
+```go
+rules := fuzzy.ParseRulesOrPanic(script)
+engine.Rules(rules...)
+```
+
+# License
 
 This library is distributed under the MIT license.

@@ -20,14 +20,22 @@ type Result struct {
 	membership  Membership
 }
 
-func (r *Result) Term() string {
+func (r Result) Term() string {
 	return r.term
 }
 
-func (r *Result) TruthDegree() float64 {
+func (r Result) TruthDegree() float64 {
 	return r.truthDegree
 }
 
-func (r *Result) Membership() Membership {
+func (r Result) Membership() Membership {
 	return r.membership
+}
+
+func NewResult(term string, thruthDegree float64, membership Membership) Result {
+	return Result{
+		term:        term,
+		truthDegree: thruthDegree,
+		membership:  membership,
+	}
 }

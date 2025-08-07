@@ -7,13 +7,13 @@ import (
 )
 
 type AndExpr struct {
-	expr []Expr
+	exprs []Expr
 }
 
 func (e *AndExpr) Value(ctx *Context) (float64, error) {
 	min := math.Inf(1) // Initialize to positive infinity
 
-	for _, m := range e.expr {
+	for _, m := range e.exprs {
 		v, err := m.Value(ctx)
 		if err != nil {
 			return 0, errors.WithStack(err)
@@ -23,6 +23,10 @@ func (e *AndExpr) Value(ctx *Context) (float64, error) {
 	}
 
 	return min, nil
+}
+
+func (e *AndExpr) Exprs() []Expr {
+	return e.exprs
 }
 
 func And(expr ...Expr) *AndExpr {

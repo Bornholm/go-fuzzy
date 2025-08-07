@@ -7,13 +7,13 @@ import (
 )
 
 type OrExpr struct {
-	expr []Expr
+	exprs []Expr
 }
 
 func (e *OrExpr) Value(ctx *Context) (float64, error) {
 	max := math.Inf(-1) // Initialize to negative infinity
 
-	for _, m := range e.expr {
+	for _, m := range e.exprs {
 		v, err := m.Value(ctx)
 		if err != nil {
 			return 0, errors.WithStack(err)
@@ -23,6 +23,10 @@ func (e *OrExpr) Value(ctx *Context) (float64, error) {
 	}
 
 	return max, nil
+}
+
+func (e *OrExpr) Exprs() []Expr {
+	return e.exprs
 }
 
 func Or(expr ...Expr) *OrExpr {
