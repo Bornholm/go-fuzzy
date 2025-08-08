@@ -1,5 +1,7 @@
 package fuzzy
 
+import "sort"
+
 type Results map[string]map[string]Result
 
 func (r Results) Best(variable string) Result {
@@ -12,6 +14,15 @@ func (r Results) Best(variable string) Result {
 	}
 
 	return best
+}
+
+func (r Results) Variables() []string {
+	variables := make([]string, 0, len(r))
+	for name := range r {
+		variables = append(variables, name)
+	}
+	sort.Strings(variables)
+	return variables
 }
 
 type Result struct {

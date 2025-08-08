@@ -5,6 +5,14 @@ type Rule struct {
 	conclusion *IsExpr
 }
 
+func (r *Rule) Premise() Expr {
+	return r.premise
+}
+
+func (r *Rule) Conclusion() *IsExpr {
+	return r.conclusion
+}
+
 func (r *Rule) Then(variable string, term string) *Rule {
 	r.conclusion = Set(variable, term)
 

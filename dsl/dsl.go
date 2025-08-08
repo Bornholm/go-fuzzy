@@ -2,7 +2,7 @@ package dsl
 
 import (
 	"fmt"
-	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/bornholm/go-fuzzy"
@@ -81,6 +81,14 @@ const (
 	tokenTERM   = "TERM"
 	tokenLPAREN = "("
 	tokenRPAREN = ")"
+
+	// New tokens for variable definitions
+	tokenDEFINE     = "DEFINE"
+	tokenCOMMA      = ","
+	tokenLINEAR     = "LINEAR"
+	tokenTRIANGULAR = "TRIANGULAR"
+	tokenTRAPEZOID  = "TRAPEZOID"
+	tokenINVERTED   = "INVERTED"
 )
 
 // Token represents a lexical token in the DSL
@@ -111,6 +119,8 @@ func tokenize(input string) ([]Token, error) {
 		// Replace parentheses with spaces around them
 		line = strings.ReplaceAll(line, "(", " ( ")
 		line = strings.ReplaceAll(line, ")", " ) ")
+		// Replace commas with spaces around them
+		line = strings.ReplaceAll(line, ",", " , ")
 
 		// Split line into words
 		words := strings.Fields(line)
@@ -158,12 +168,26 @@ func tokenize(input string) ([]Token, error) {
 			tokenType = tokenOR
 		case "NOT":
 			tokenType = tokenNOT
+		case "DEFINE":
+			tokenType = tokenDEFINE
+		case "TERM":
+			tokenType = tokenTERM
+		case "LINEAR":
+			tokenType = tokenLINEAR
+		case "TRIANGULAR":
+			tokenType = tokenTRIANGULAR
+		case "TRAPEZOID":
+			tokenType = tokenTRAPEZOID
+		case "INVERTED":
+			tokenType = tokenINVERTED
 		case "(":
 			tokenType = tokenLPAREN
 		case ")":
 			tokenType = tokenRPAREN
 		case ";":
 			tokenType = tokenSEMI
+		case ",":
+			tokenType = tokenCOMMA
 		default:
 			// If it's not a keyword, it's a variable or term name
 			tokenType = tokenVAR
@@ -179,27 +203,10 @@ func tokenize(input string) ([]Token, error) {
 	return tokens, nil
 }
 
-// splitWhilePreservingParentheses splits the input string by whitespace
-// while preserving parentheses as separate tokens
-func splitWhilePreservingParentheses(input string) []string {
-	// Replace parentheses with spaces around them to ensure they're separate tokens
-	input = strings.ReplaceAll(input, "(", " ( ")
-	input = strings.ReplaceAll(input, ")", " ) ")
-
-	// Use regexp to split by whitespace, preserving quoted strings if any
-	r := regexp.MustCompile(`[^\s"']+|"([^"]*)"|'([^']*)`)
-	matches := r.FindAllString(input, -1)
-
-	// Filter out empty strings
-	var result []string
-	for _, match := range matches {
-		match = strings.TrimSpace(match)
-		if match != "" {
-			result = append(result, match)
-		}
-	}
-
-	return result
+// ParseResult contains both rules and variables parsed from the DSL
+type ParseResult struct {
+	Rules     []*fuzzy.Rule
+	Variables []*fuzzy.Variable
 }
 
 // Parser holds the state during parsing
@@ -208,19 +215,31 @@ type Parser struct {
 	current int
 }
 
-// parse processes the tokens and produces rules
-func (p *Parser) parse() ([]*fuzzy.Rule, error) {
+// parse processes the tokens and produces rules and variables
+func (p *Parser) parse() (*ParseResult, error) {
 	var rules []*fuzzy.Rule
+	var variables []*fuzzy.Variable
 	var errs []string
 
 	for p.current < len(p.tokens) {
-		rule, err := p.parseRule()
-		if err != nil {
-			// Collect errors but keep trying to parse other rules
-			errs = append(errs, err.Error())
-		}
-		if rule != nil {
-			rules = append(rules, rule)
+		if p.current < len(p.tokens) && p.tokens[p.current].Type == tokenDEFINE {
+			// Parse variable definition
+			variable, err := p.parseVariableDefinition()
+			if err != nil {
+				errs = append(errs, err.Error())
+			}
+			if variable != nil {
+				variables = append(variables, variable)
+			}
+		} else {
+			// Parse rule
+			rule, err := p.parseRule()
+			if err != nil {
+				errs = append(errs, err.Error())
+			}
+			if rule != nil {
+				rules = append(rules, rule)
+			}
 		}
 
 		// If we've reached the end of tokens, break
@@ -230,12 +249,14 @@ func (p *Parser) parse() ([]*fuzzy.Rule, error) {
 	}
 
 	// If we encountered any errors, return them all together
-	// Note: We're returning errors even if we successfully parsed some rules
 	if len(errs) > 0 {
 		return nil, errors.Errorf("parsing errors: %s", strings.Join(errs, "; "))
 	}
 
-	return rules, nil
+	return &ParseResult{
+		Rules:     rules,
+		Variables: variables,
+	}, nil
 }
 
 // parseRule parses a single rule
@@ -553,8 +574,395 @@ func (p *Parser) parseLogicalCombination(left fuzzy.Expr) (fuzzy.Expr, error) {
 	return left, nil
 }
 
+// parseVariableDefinition parses a variable definition (DEFINE variable (...);)
+func (p *Parser) parseVariableDefinition() (*fuzzy.Variable, error) {
+	// Skip DEFINE token
+	defineToken := p.tokens[p.current]
+	p.current++
+
+	// Get variable name
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
+		return nil, newParseError("expected variable name after DEFINE",
+			defineToken.Position, nil)
+	}
+	variableName := p.tokens[p.current].Value
+	p.current++
+
+	// Expect open parenthesis
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenLPAREN {
+		return nil, newParseError("expected ( after variable name",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	// Parse term definitions
+	var terms []*fuzzy.Term
+	for p.current < len(p.tokens) && p.tokens[p.current].Type != tokenRPAREN {
+		// Each term definition should start with TERM
+		if p.tokens[p.current].Type != tokenTERM {
+			return nil, newParseError("expected TERM in variable definition",
+				p.tokens[p.current].Position, nil)
+		}
+
+		term, err := p.parseTermDefinition()
+		if err != nil {
+			return nil, err
+		}
+		terms = append(terms, term)
+
+		// After a term definition, expect a comma or closing parenthesis
+		if p.current < len(p.tokens) && p.tokens[p.current].Type == tokenCOMMA {
+			p.current++ // Skip comma
+		}
+	}
+
+	// Expect closing parenthesis
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenRPAREN {
+		return nil, newParseError("expected ) at end of variable definition",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	// Expect semicolon
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenSEMI {
+		return nil, newParseError("expected ; after variable definition",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	// Create variable with parsed terms
+	return fuzzy.NewVariable(variableName, terms...), nil
+}
+
+// parseTermDefinition parses a term definition (TERM name FUNCTION_TYPE (params))
+func (p *Parser) parseTermDefinition() (*fuzzy.Term, error) {
+	// Skip TERM token
+	termToken := p.tokens[p.current]
+	p.current++
+
+	// Get term name
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
+		return nil, newParseError("expected term name", termToken.Position, nil)
+	}
+	termName := p.tokens[p.current].Value
+	p.current++
+
+	// Next token should be the membership function type
+	if p.current >= len(p.tokens) {
+		return nil, newParseError("expected membership function type",
+			p.tokens[p.current-1].Position, nil)
+	}
+
+	// Parse membership function
+	membership, err := p.parseMembershipFunction()
+	if err != nil {
+		return nil, err
+	}
+
+	return fuzzy.NewTerm(termName, membership), nil
+}
+
+// parseMembershipFunction parses a membership function definition
+func (p *Parser) parseMembershipFunction() (fuzzy.Membership, error) {
+	// Get function type
+	if p.current >= len(p.tokens) {
+		return nil, newParseError("expected membership function type",
+			p.tokens[p.current-1].Position, nil)
+	}
+
+	funcTypeToken := p.tokens[p.current]
+	funcType := funcTypeToken.Type
+	p.current++
+
+	// Handle different function types
+	switch funcType {
+	case tokenLINEAR:
+		// Parse LINEAR(x1, x2)
+		return p.parseLinearFunction()
+
+	case tokenTRIANGULAR:
+		// Parse TRIANGULAR(x1, x2, x3)
+		return p.parseTriangularFunction()
+
+	case tokenTRAPEZOID:
+		// Parse TRAPEZOID(x1, x2, x3, x4)
+		return p.parseTrapezoidFunction()
+
+	case tokenINVERTED:
+		// Parse INVERTED(function)
+		return p.parseInvertedFunction()
+
+	default:
+		return nil, newParseError(
+			fmt.Sprintf("unknown membership function type: %s", p.tokens[p.current-1].Value),
+			funcTypeToken.Position, nil)
+	}
+}
+
+// parseLinearFunction parses a LINEAR(x1, x2) membership function
+func (p *Parser) parseLinearFunction() (fuzzy.Membership, error) {
+	// Expect open parenthesis
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenLPAREN {
+		return nil, newParseError("expected ( after LINEAR",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	// Parse first parameter
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
+		return nil, newParseError("expected first parameter for LINEAR",
+			p.tokens[p.current-1].Position, nil)
+	}
+	x1Str := p.tokens[p.current].Value
+	x1, err := parseFloat(x1Str, p.tokens[p.current].Position)
+	if err != nil {
+		return nil, err
+	}
+	p.current++
+
+	// Expect comma
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenCOMMA {
+		return nil, newParseError("expected , between parameters",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	// Parse second parameter
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
+		return nil, newParseError("expected second parameter for LINEAR",
+			p.tokens[p.current-1].Position, nil)
+	}
+	x2Str := p.tokens[p.current].Value
+	x2, err := parseFloat(x2Str, p.tokens[p.current].Position)
+	if err != nil {
+		return nil, err
+	}
+	p.current++
+
+	// Expect closing parenthesis
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenRPAREN {
+		return nil, newParseError("expected ) after LINEAR parameters",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	// The Linear function has issues with descending linear functions (x1 > x2)
+	// Create a function that behaves correctly for both ascending and descending cases
+	if x1 < x2 {
+		// Ascending function: 0 at x1, 1 at x2
+		return fuzzy.Linear(x1, x2), nil
+	} else if x1 > x2 {
+		// Descending function: 1 at x2, 0 at x1
+		// For a descending function like LINEAR(10, 0), we create Linear(0, 10) and invert it
+		return fuzzy.Inverted(fuzzy.Linear(x2, x1)), nil
+	} else {
+		// x1 == x2 case - step function
+		return fuzzy.Step(x1), nil
+	}
+}
+
+// parseTriangularFunction parses a TRIANGULAR(x1, x2, x3) membership function
+func (p *Parser) parseTriangularFunction() (fuzzy.Membership, error) {
+	// Expect open parenthesis
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenLPAREN {
+		return nil, newParseError("expected ( after TRIANGULAR",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	// Parse first parameter
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
+		return nil, newParseError("expected first parameter for TRIANGULAR",
+			p.tokens[p.current-1].Position, nil)
+	}
+	x1Str := p.tokens[p.current].Value
+	x1, err := parseFloat(x1Str, p.tokens[p.current].Position)
+	if err != nil {
+		return nil, err
+	}
+	p.current++
+
+	// Expect comma
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenCOMMA {
+		return nil, newParseError("expected , between parameters",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	// Parse second parameter
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
+		return nil, newParseError("expected second parameter for TRIANGULAR",
+			p.tokens[p.current-1].Position, nil)
+	}
+	x2Str := p.tokens[p.current].Value
+	x2, err := parseFloat(x2Str, p.tokens[p.current].Position)
+	if err != nil {
+		return nil, err
+	}
+	p.current++
+
+	// Expect comma
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenCOMMA {
+		return nil, newParseError("expected , between parameters",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	// Parse third parameter
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
+		return nil, newParseError("expected third parameter for TRIANGULAR",
+			p.tokens[p.current-1].Position, nil)
+	}
+	x3Str := p.tokens[p.current].Value
+	x3, err := parseFloat(x3Str, p.tokens[p.current].Position)
+	if err != nil {
+		return nil, err
+	}
+	p.current++
+
+	// Expect closing parenthesis
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenRPAREN {
+		return nil, newParseError("expected ) after TRIANGULAR parameters",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	return fuzzy.Triangular(x1, x2, x3), nil
+}
+
+// parseTrapezoidFunction parses a TRAPEZOID(x1, x2, x3, x4) membership function
+func (p *Parser) parseTrapezoidFunction() (fuzzy.Membership, error) {
+	// Expect open parenthesis
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenLPAREN {
+		return nil, newParseError("expected ( after TRAPEZOID",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	// Parse first parameter
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
+		return nil, newParseError("expected first parameter for TRAPEZOID",
+			p.tokens[p.current-1].Position, nil)
+	}
+	x1Str := p.tokens[p.current].Value
+	x1, err := parseFloat(x1Str, p.tokens[p.current].Position)
+	if err != nil {
+		return nil, err
+	}
+	p.current++
+
+	// Expect comma
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenCOMMA {
+		return nil, newParseError("expected , between parameters",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	// Parse second parameter
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
+		return nil, newParseError("expected second parameter for TRAPEZOID",
+			p.tokens[p.current-1].Position, nil)
+	}
+	x2Str := p.tokens[p.current].Value
+	x2, err := parseFloat(x2Str, p.tokens[p.current].Position)
+	if err != nil {
+		return nil, err
+	}
+	p.current++
+
+	// Expect comma
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenCOMMA {
+		return nil, newParseError("expected , between parameters",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	// Parse third parameter
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
+		return nil, newParseError("expected third parameter for TRAPEZOID",
+			p.tokens[p.current-1].Position, nil)
+	}
+	x3Str := p.tokens[p.current].Value
+	x3, err := parseFloat(x3Str, p.tokens[p.current].Position)
+	if err != nil {
+		return nil, err
+	}
+	p.current++
+
+	// Expect comma
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenCOMMA {
+		return nil, newParseError("expected , between parameters",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	// Parse fourth parameter
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
+		return nil, newParseError("expected fourth parameter for TRAPEZOID",
+			p.tokens[p.current-1].Position, nil)
+	}
+	x4Str := p.tokens[p.current].Value
+	x4, err := parseFloat(x4Str, p.tokens[p.current].Position)
+	if err != nil {
+		return nil, err
+	}
+	p.current++
+
+	// Expect closing parenthesis
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenRPAREN {
+		return nil, newParseError("expected ) after TRAPEZOID parameters",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	return fuzzy.Trapezoid(x1, x2, x3, x4), nil
+}
+
+// parseInvertedFunction parses an INVERTED(function) membership function
+func (p *Parser) parseInvertedFunction() (fuzzy.Membership, error) {
+	// Expect open parenthesis
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenLPAREN {
+		return nil, newParseError("expected ( after INVERTED",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	// Parse the inner membership function
+	innerFunc, err := p.parseMembershipFunction()
+	if err != nil {
+		return nil, err
+	}
+
+	// Expect closing parenthesis
+	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenRPAREN {
+		return nil, newParseError("expected ) after INVERTED function",
+			p.tokens[p.current-1].Position, nil)
+	}
+	p.current++
+
+	return fuzzy.Inverted(innerFunc), nil
+}
+
+// parseFloat parses a string to a float64
+func parseFloat(s string, pos Position) (float64, error) {
+	val, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, newParseError(fmt.Sprintf("invalid number: %s", s), pos, err)
+	}
+	return val, nil
+}
+
 // ParseRules parses DSL text into a slice of Rule objects
 func ParseRules(dsl string) ([]*fuzzy.Rule, error) {
+	result, err := ParseRulesAndVariables(dsl)
+	if err != nil {
+		return nil, err
+	}
+	return result.Rules, nil
+}
+
+// ParseRulesAndVariables parses DSL text into both rules and variables
+func ParseRulesAndVariables(dsl string) (*ParseResult, error) {
 	tokens, err := tokenize(dsl)
 	if err != nil {
 		return nil, errors.Wrap(err, "tokenization error")
@@ -565,12 +973,12 @@ func ParseRules(dsl string) ([]*fuzzy.Rule, error) {
 		current: 0,
 	}
 
-	rules, err := parser.parse()
+	result, err := parser.parse()
 	if err != nil {
 		return nil, errors.Wrap(err, "parsing error")
 	}
 
-	return rules, nil
+	return result, nil
 }
 
 // ParseRulesOrPanic parses DSL text into a slice of Rule objects or panics on error
@@ -580,4 +988,22 @@ func ParseRulesOrPanic(dsl string) []*fuzzy.Rule {
 		panic(fmt.Sprintf("failed to parse rules: %v", err))
 	}
 	return rules
+}
+
+// ParseVariables parses DSL text into a slice of Variable objects
+func ParseVariables(dsl string) ([]*fuzzy.Variable, error) {
+	result, err := ParseRulesAndVariables(dsl)
+	if err != nil {
+		return nil, err
+	}
+	return result.Variables, nil
+}
+
+// ParseVariablesOrPanic parses DSL text into a slice of Variable objects or panics on error
+func ParseVariablesOrPanic(dsl string) []*fuzzy.Variable {
+	variables, err := ParseVariables(dsl)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse variables: %v", err))
+	}
+	return variables
 }

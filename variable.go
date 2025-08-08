@@ -27,6 +27,14 @@ func (v *Variable) Term(name string) (*Term, error) {
 	return t, nil
 }
 
+func (v *Variable) Terms() []*Term {
+	terms := make([]*Term, 0, len(v.terms))
+	for _, t := range v.terms {
+		terms = append(terms, t)
+	}
+	return terms
+}
+
 func (v *Variable) UniverseMin() float64 {
 	return v.universeMin
 }

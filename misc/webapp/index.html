@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Go-Fuzzy Logic Tester</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css"
+    />
+    <script src="wasm_exec.js"></script>
+  </head>
+  <body>
+    <section class="section">
+      <div class="container">
+        <div class="level">
+          <div class="level-left">
+            <h1 class="title is-size-1 level-item">GoFuzzy</h1>
+          </div>
+          <div class="level-right">
+            <button class="button is-link is-large" id="share">Share</button>
+          </div>
+        </div>
+        <p class="subtitle">
+          Test fuzzy logic inference systems directly in your browser
+        </p>
+        <div class="columns">
+          <div class="column">
+            <h2 class="title is-size-2">Definition</h2>
+            <textarea
+              rows="13"
+              class="textarea has-background-dark has-text-light is-family-code"
+              id="definition"
+            >
+DEFINE temperature (
+    TERM hot LINEAR (20, 30),
+    TERM cold LINEAR (10, 0)
+);
+
+DEFINE ac_mode (
+    TERM heating LINEAR (0, 100),
+    TERM cooling LINEAR (100, 0)
+);
+
+IF temperature IS hot THEN ac_mode IS cooling;
+IF temperature IS cold THEN ac_mode IS heating;
+          </textarea
+            >
+          </div>
+          <div class="column">
+            <h2 class="title is-size-2">Inputs</h2>
+            <textarea
+              rows="13"
+              class="textarea has-background-dark has-text-light is-family-code"
+              id="inputs"
+            >
+{
+    "temperature": 25
+}
+            </textarea>
+          </div>
+        </div>
+        <button id="execute" class="button is-primary is-fullwidth is-large">
+          Execute
+        </button>
+        <h2 class="title is-size-2 mt-5">Results</h2>
+        <textarea
+          rows="13"
+          class="textarea has-background-dark has-text-light is-family-code"
+          id="results"
+        ></textarea>
+      </div>
+    </section>
+    <script type="text/javascript">
+      (function () {
+        const go = new Go();
+        WebAssembly.instantiateStreaming(
+          fetch("main.wasm"),
+          go.importObject
+        ).then((result) => {
+          go.run(result.instance);
+        });
+      })();
+    </script>
+  </body>
+</html>
