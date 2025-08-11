@@ -8,7 +8,81 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css"
     />
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js"
+      integrity="sha512-8RnEqURPUc5aqFEN04aQEiPlSAdE0jlFS/9iGgUyNtwFnSKCXhmB6ZTNl7LnDtDWKabJIASzXrzD0K+LYexU9g=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    ></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.css"
+      integrity="sha512-uf06llspW44/LZpHzHT6qBOIVODjWtv4MxCricRxkzvopAlSWnTf6hpZTFxuuZcuNE9CBQhqE0Seu1CoRk84nQ=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/javascript/javascript.min.js"
+      integrity="sha512-I6CdJdruzGtvDyvdO4YsiAq+pkWf2efgd1ZUSK2FnM/u2VuRASPC7GowWQrWyjxCZn6CT89s3ddGI+be0Ak9Fg=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    ></script>
+    <script type="text/javascript">
+      CodeMirror.defineMode("fuzzylogic", function () {
+        return {
+          token: function (stream, state) {
+            if (stream.eatSpace()) return null;
+
+            // Handle comments
+            if (stream.match("//")) {
+              stream.skipToEnd();
+              return "comment";
+            }
+            if (stream.match("/*")) {
+              state.tokenize = function (stream, state) {
+                if (stream.skipTo("*/")) {
+                  stream.match("*/");
+                  state.tokenize = null;
+                } else {
+                  stream.skipToEnd();
+                }
+                return "comment";
+              };
+              return "comment";
+            }
+
+            // Handle keywords
+            if (stream.match(/^(DEFINE|TERM|LINEAR|INVERTED|IF|IS|THEN)\b/i)) {
+              return "keyword";
+            }
+
+            // Handle numbers
+            if (stream.match(/^-?\d+/)) {
+              return "number";
+            }
+
+            // Handle variables
+            if (stream.match(/^[a-zA-Z_]\w*/)) {
+              return "variable";
+            }
+
+            // Handle operators and punctuation
+            if (stream.match(/^[(),;]/)) {
+              return "operator";
+            }
+
+            stream.next();
+            return null;
+          },
+        };
+      });
+    </script>
     <script src="wasm_exec.js"></script>
+    <style>
+      .CodeMirror {
+        min-height: 800px;
+      }
+    </style>
   </head>
   <body>
     <section class="section">
@@ -25,39 +99,87 @@
           Test fuzzy logic inference systems directly in your browser
         </p>
         <div class="columns">
-          <div class="column">
+          <div class="column is-8">
             <h2 class="title is-size-2">Definition</h2>
-            <textarea
-              rows="13"
-              class="textarea has-background-dark has-text-light is-family-code"
-              id="definition"
-            >
+            <textarea class="textarea" id="definition">
+// This line defines an input variable that the fuzzy system will use, 
+// in this case, "temperature".
 DEFINE temperature (
+    // This defines a "fuzzy set" or a state named "hot" for the temperature variable.
+    // The "hotness" is 0 at 20 degrees and increases linearly to 100% at 30 degrees.
     TERM hot LINEAR (20, 30),
-    TERM cold LINEAR (10, 0)
+    // This defines a "fuzzy set" or a state named "ok" for the temperature variable.
+    // The "okayness" is 0 at 15 degrees and less, is 100% between 18 and 21 degrees and decreases after.
+    TERM ok TRAPEZOID (15, 18, 21, 25),
+    // This defines another fuzzy set named "cold".
+    // The "coldness" is 100% at 0 degrees and decreases linearly to 0% at 16 degrees.
+    TERM cold LINEAR (16, 0)
 );
 
+// This defines the output variable for our system, 
+// which is the air conditioner's mode.
 DEFINE ac_mode (
+    // This defines a possible output state for the AC, in this case, "heating".
+    // It varies between 0 and 100, 100 indicating full heating power.
     TERM heating LINEAR (0, 100),
-    TERM cooling LINEAR (100, 0)
+    // This defines a other possible output state for the AC, "stopped"
+    // It varies between -50 and 50, 0 indicating a fully stopped AC.
+	TERM stopped TRIANGULAR (-50, 0, 50),
+    // This defines the other possible output state for the AC, "cooling".
+    // It varies between 0 and -100, -100 indicating full cooling power.
+    TERM cooling LINEAR (0, -100)
 );
 
+// This is a fuzzy rule that connects an input to an output.
+// It states that if the temperature is considered "hot", 
+// then the AC mode should be set to "cooling".
 IF temperature IS hot THEN ac_mode IS cooling;
+
+IF temperature IS ok THEN ac_mode IS stopped;
+
 IF temperature IS cold THEN ac_mode IS heating;
           </textarea
             >
+            <script type="text/javascript">
+              const definitionEl = document.getElementById("definition");
+              const definitionEditor = CodeMirror.fromTextArea(definitionEl, {
+                lineNumbers: true,
+                mode: "fuzzylogic",
+              });
+              definitionEl.addEventListener("change", () => {
+                if (definitionEl.value === definitionEditor.getDoc().getValue())
+                  return;
+                definitionEditor.getDoc().setValue(definitionEl.value);
+              });
+              definitionEditor.on("change", () => {
+                if (definitionEl.value === definitionEditor.getDoc().getValue())
+                  return;
+                definitionEl.value = definitionEditor.getDoc().getValue();
+              });
+            </script>
           </div>
           <div class="column">
             <h2 class="title is-size-2">Inputs</h2>
-            <textarea
-              rows="13"
-              class="textarea has-background-dark has-text-light is-family-code"
-              id="inputs"
-            >
+            <textarea rows="13" class="textarea" id="inputs">
 {
-    "temperature": 25
+    "temperature": 20
 }
             </textarea>
+            <script type="text/javascript">
+              const inputsEl = document.getElementById("inputs");
+              const inputsEditor = CodeMirror.fromTextArea(inputsEl, {
+                lineNumbers: true,
+                mode: "javascript",
+              });
+              inputsEditor.on("change", () => {
+                if (inputsEl.value === inputsEditor.getDoc().getValue()) return;
+                inputsEl.value = inputsEditor.getDoc().getValue();
+              });
+              inputsEl.addEventListener("change", () => {
+                if (inputsEl.value === inputsEditor.getDoc().getValue()) return;
+                inputsEditor.getDoc().setValue(inputsEl.value);
+              });
+            </script>
           </div>
         </div>
         <button id="execute" class="button is-primary is-fullwidth is-large">

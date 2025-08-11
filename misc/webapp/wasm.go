@@ -111,16 +111,6 @@ func main() {
 		}
 	}
 
-	inputsTextArea.Call("addEventListener", "change", js.FuncOf(func(this js.Value, args []js.Value) any {
-		updateInputs()
-		return nil
-	}))
-
-	definitionTextArea.Call("addEventListener", "change", js.FuncOf(func(this js.Value, args []js.Value) any {
-		updateRulesAndVariables()
-		return nil
-	}))
-
 	executeButton.Call("addEventListener", "click", js.FuncOf(func(this js.Value, args []js.Value) any {
 		executeEngine()
 		return nil
@@ -190,7 +180,9 @@ func main() {
 
 				if payload != nil {
 					definitionTextArea.Set("value", payload["d"])
+					definitionTextArea.Call("dispatchEvent", js.Global().Get("Event").New("change"))
 					inputsTextArea.Set("value", payload["i"])
+					inputsTextArea.Call("dispatchEvent", js.Global().Get("Event").New("change"))
 				}
 			}
 		}

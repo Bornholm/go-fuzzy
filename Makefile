@@ -2,7 +2,7 @@ webapp:
 	rm -rf dist/webapp
 	mkdir -p dist/webapp
 	cp -f "$(shell go env GOROOT)/lib/wasm/wasm_exec.js" ./dist/webapp
-	cp -f misc/webapp/index.html ./dist/webapp
+	cp -rf misc/webapp/*.html ./dist/webapp/
 	GOOS=js GOARCH=wasm go build -o dist/webapp/main.wasm ./misc/webapp
 
 test:
