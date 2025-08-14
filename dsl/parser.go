@@ -17,8 +17,9 @@ type ParseResult struct {
 
 // Parser holds the state during parsing
 type Parser struct {
-	tokens  []Token
-	current int
+	tokens      []Token
+	current     int
+	memberships map[string]MembershipParser
 }
 
 // parse processes the tokens and produces rules and variables

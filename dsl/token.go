@@ -19,12 +19,8 @@ const (
 	tokenRPAREN = ")"
 
 	// Tokens for variable definitions
-	tokenDEFINE     = "DEFINE"
-	tokenCOMMA      = ","
-	tokenLINEAR     = "LINEAR"
-	tokenTRIANGULAR = "TRIANGULAR"
-	tokenTRAPEZOID  = "TRAPEZOID"
-	tokenINVERTED   = "INVERTED"
+	tokenDEFINE = "DEFINE"
+	tokenCOMMA  = ","
 )
 
 // Token represents a lexical token in the DSL

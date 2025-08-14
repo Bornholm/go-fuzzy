@@ -1,15 +1,41 @@
 package dsl
 
 import (
-	"fmt"
-
 	"github.com/bornholm/go-fuzzy"
 	"github.com/pkg/errors"
 )
 
+type Options struct {
+	Memberships map[string]MembershipParser
+}
+
+type OptionFunc func(opts *Options)
+
+func NewOptions(funcs ...OptionFunc) *Options {
+	opts := &Options{
+		Memberships: DefaultMemberships,
+	}
+	for _, fn := range funcs {
+		fn(opts)
+	}
+	return opts
+}
+
+func WithMembershipParser(funcType string, parser MembershipParser) OptionFunc {
+	return func(opts *Options) {
+		opts.Memberships[funcType] = parser
+	}
+}
+
+func WithMembershipParsers(parsers map[string]MembershipParser) OptionFunc {
+	return func(opts *Options) {
+		opts.Memberships = parsers
+	}
+}
+
 // ParseRules parses DSL text into a slice of Rule objects
-func ParseRules(dsl string) ([]*fuzzy.Rule, error) {
-	result, err := ParseRulesAndVariables(dsl)
+func ParseRules(dsl string, funcs ...OptionFunc) ([]*fuzzy.Rule, error) {
+	result, err := ParseRulesAndVariables(dsl, funcs...)
 	if err != nil {
 		return nil, err
 	}
@@ -17,15 +43,17 @@ func ParseRules(dsl string) ([]*fuzzy.Rule, error) {
 }
 
 // ParseRulesAndVariables parses DSL text into both rules and variables
-func ParseRulesAndVariables(dsl string) (*ParseResult, error) {
+func ParseRulesAndVariables(dsl string, funcs ...OptionFunc) (*ParseResult, error) {
+	opts := NewOptions(funcs...)
 	tokens, err := tokenize(dsl)
 	if err != nil {
 		return nil, errors.Wrap(err, "tokenization error")
 	}
 
 	parser := &Parser{
-		tokens:  tokens,
-		current: 0,
+		tokens:      tokens,
+		current:     0,
+		memberships: opts.Memberships,
 	}
 
 	result, err := parser.parse()
@@ -37,17 +65,17 @@ func ParseRulesAndVariables(dsl string) (*ParseResult, error) {
 }
 
 // ParseRulesOrPanic parses DSL text into a slice of Rule objects or panics on error
-func ParseRulesOrPanic(dsl string) []*fuzzy.Rule {
-	rules, err := ParseRules(dsl)
+func ParseRulesOrPanic(dsl string, funcs ...OptionFunc) []*fuzzy.Rule {
+	rules, err := ParseRules(dsl, funcs...)
 	if err != nil {
-		panic(fmt.Sprintf("failed to parse rules: %v", err))
+		panic(errors.Errorf("failed to parse rules: %v", err))
 	}
 	return rules
 }
 
 // ParseVariables parses DSL text into a slice of Variable objects
-func ParseVariables(dsl string) ([]*fuzzy.Variable, error) {
-	result, err := ParseRulesAndVariables(dsl)
+func ParseVariables(dsl string, funcs ...OptionFunc) ([]*fuzzy.Variable, error) {
+	result, err := ParseRulesAndVariables(dsl, funcs...)
 	if err != nil {
 		return nil, err
 	}
@@ -55,10 +83,10 @@ func ParseVariables(dsl string) ([]*fuzzy.Variable, error) {
 }
 
 // ParseVariablesOrPanic parses DSL text into a slice of Variable objects or panics on error
-func ParseVariablesOrPanic(dsl string) []*fuzzy.Variable {
-	variables, err := ParseVariables(dsl)
+func ParseVariablesOrPanic(dsl string, funcs ...OptionFunc) []*fuzzy.Variable {
+	variables, err := ParseVariables(dsl, funcs...)
 	if err != nil {
-		panic(fmt.Sprintf("failed to parse variables: %v", err))
+		panic(errors.Errorf("failed to parse variables: %v", err))
 	}
 	return variables
 }

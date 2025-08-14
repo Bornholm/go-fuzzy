@@ -4,7 +4,18 @@ import (
 	"fmt"
 
 	"github.com/bornholm/go-fuzzy"
+	"github.com/pkg/errors"
 )
+
+type MembershipParser interface {
+	ParseMembership(tokens []Token, current int, parse ParseMembershipFunc) (membership fuzzy.Membership, newCurrent int, err error)
+}
+
+type ParseMembershipFunc func(tokens []Token, current int, parse ParseMembershipFunc) (fuzzy.Membership, int, error)
+
+func (fn ParseMembershipFunc) ParseMembership(tokens []Token, current int, parse ParseMembershipFunc) (membership fuzzy.Membership, newCurrent int, err error) {
+	return fn(tokens, current, parse)
+}
 
 // parseMembershipFunction parses a membership function definition
 func (p *Parser) parseMembershipFunction() (fuzzy.Membership, error) {
@@ -14,277 +25,286 @@ func (p *Parser) parseMembershipFunction() (fuzzy.Membership, error) {
 			p.tokens[p.current-1].Position, nil)
 	}
 
-	funcTypeToken := p.tokens[p.current]
-	funcType := funcTypeToken.Type
-	p.current++
+	var parseMembership ParseMembershipFunc = func(tokens []Token, current int, parse ParseMembershipFunc) (membership fuzzy.Membership, newCurrent int, err error) {
+		funcTypeToken := tokens[current]
+		funcType := funcTypeToken.Type
 
-	// Handle different function types
-	switch funcType {
-	case tokenLINEAR:
-		// Parse LINEAR(x1, x2)
-		return p.parseLinearFunction()
+		current++
 
-	case tokenTRIANGULAR:
-		// Parse TRIANGULAR(x1, x2, x3)
-		return p.parseTriangularFunction()
+		membershipParser, exists := p.memberships[funcType]
+		if !exists {
+			return nil, current, newParseError(
+				fmt.Sprintf("unknown membership function type: %s", tokens[current-1].Value),
+				funcTypeToken.Position, nil)
+		}
 
-	case tokenTRAPEZOID:
-		// Parse TRAPEZOID(x1, x2, x3, x4)
-		return p.parseTrapezoidFunction()
-
-	case tokenINVERTED:
-		// Parse INVERTED(function)
-		return p.parseInvertedFunction()
-
-	default:
-		return nil, newParseError(
-			fmt.Sprintf("unknown membership function type: %s", p.tokens[p.current-1].Value),
-			funcTypeToken.Position, nil)
+		return membershipParser.ParseMembership(tokens, current, parse)
 	}
+
+	membership, current, err := parseMembership(p.tokens, p.current, parseMembership)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	p.current = current
+
+	return membership, nil
 }
 
-// parseLinearFunction parses a LINEAR(x1, x2) membership function
-func (p *Parser) parseLinearFunction() (fuzzy.Membership, error) {
+const (
+	tokenLINEAR     string = "LINEAR"
+	tokenTRIANGULAR string = "TRIANGULAR"
+	tokenTRAPEZOID  string = "TRAPEZOID"
+	tokenINVERTED   string = "INVERTED"
+)
+
+var DefaultMemberships = map[string]MembershipParser{
+	tokenLINEAR:     ParseMembershipFunc(ParseLinear),
+	tokenTRIANGULAR: ParseMembershipFunc(ParseTriangular),
+	tokenTRAPEZOID:  ParseMembershipFunc(ParseTrapezoid),
+	tokenINVERTED:   ParseMembershipFunc(ParseInverted),
+}
+
+// ParseLinear parses a LINEAR(x1, x2) membership function
+func ParseLinear(tokens []Token, current int, parse ParseMembershipFunc) (fuzzy.Membership, int, error) {
 	// Expect open parenthesis
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenLPAREN {
-		return nil, newParseError("expected ( after LINEAR",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenLPAREN {
+		return nil, current, newParseError("expected ( after LINEAR",
+			tokens[current-1].Position, nil)
 	}
-	p.current++
+	current++
 
 	// Parse first parameter
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
-		return nil, newParseError("expected first parameter for LINEAR",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenVAR {
+		return nil, current, newParseError("expected first parameter for LINEAR",
+			tokens[current-1].Position, nil)
 	}
-	x1Str := p.tokens[p.current].Value
-	x1, err := parseFloat(x1Str, p.tokens[p.current].Position)
+	x1Str := tokens[current].Value
+	x1, err := parseFloat(x1Str, tokens[current].Position)
 	if err != nil {
-		return nil, err
+		return nil, current, err
 	}
-	p.current++
+	current++
 
 	// Expect comma
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenCOMMA {
-		return nil, newParseError("expected , between parameters",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenCOMMA {
+		return nil, current, newParseError("expected , between parameters",
+			tokens[current-1].Position, nil)
 	}
-	p.current++
+	current++
 
 	// Parse second parameter
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
-		return nil, newParseError("expected second parameter for LINEAR",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenVAR {
+		return nil, current, newParseError("expected second parameter for LINEAR",
+			tokens[current-1].Position, nil)
 	}
-	x2Str := p.tokens[p.current].Value
-	x2, err := parseFloat(x2Str, p.tokens[p.current].Position)
+	x2Str := tokens[current].Value
+	x2, err := parseFloat(x2Str, tokens[current].Position)
 	if err != nil {
-		return nil, err
+		return nil, current, err
 	}
-	p.current++
+	current++
 
 	// Expect closing parenthesis
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenRPAREN {
-		return nil, newParseError("expected ) after LINEAR parameters",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenRPAREN {
+		return nil, current, newParseError("expected ) after LINEAR parameters",
+			tokens[current-1].Position, nil)
 	}
-	p.current++
+	current++
 
 	// The Linear function has issues with descending linear functions (x1 > x2)
 	// Create a function that behaves correctly for both ascending and descending cases
 	if x1 < x2 {
 		// Ascending function: 0 at x1, 1 at x2
-		return fuzzy.Linear(x1, x2), nil
+		return fuzzy.Linear(x1, x2), current, nil
 	} else if x1 > x2 {
 		// Descending function: 1 at x2, 0 at x1
 		// For a descending function like LINEAR(10, 0), we create Linear(0, 10) and invert it
-		return fuzzy.Inverted(fuzzy.Linear(x2, x1)), nil
+		return fuzzy.Inverted(fuzzy.Linear(x2, x1)), current, nil
 	} else {
 		// x1 == x2 case - step function
-		return fuzzy.Step(x1), nil
+		return fuzzy.Step(x1), current, nil
 	}
 }
 
-// parseTriangularFunction parses a TRIANGULAR(x1, x2, x3) membership function
-func (p *Parser) parseTriangularFunction() (fuzzy.Membership, error) {
+// ParseTriangular parses a TRIANGULAR(x1, x2, x3) membership function
+func ParseTriangular(tokens []Token, current int, parse ParseMembershipFunc) (fuzzy.Membership, int, error) {
 	// Expect open parenthesis
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenLPAREN {
-		return nil, newParseError("expected ( after TRIANGULAR",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenLPAREN {
+		return nil, current, newParseError("expected ( after TRIANGULAR",
+			tokens[current-1].Position, nil)
 	}
-	p.current++
+	current++
 
 	// Parse first parameter
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
-		return nil, newParseError("expected first parameter for TRIANGULAR",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenVAR {
+		return nil, current, newParseError("expected first parameter for TRIANGULAR",
+			tokens[current-1].Position, nil)
 	}
-	x1Str := p.tokens[p.current].Value
-	x1, err := parseFloat(x1Str, p.tokens[p.current].Position)
+	x1Str := tokens[current].Value
+	x1, err := parseFloat(x1Str, tokens[current].Position)
 	if err != nil {
-		return nil, err
+		return nil, current, errors.WithStack(err)
 	}
-	p.current++
+	current++
 
 	// Expect comma
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenCOMMA {
-		return nil, newParseError("expected , between parameters",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenCOMMA {
+		return nil, current, newParseError("expected , between parameters",
+			tokens[current-1].Position, nil)
 	}
-	p.current++
+	current++
 
 	// Parse second parameter
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
-		return nil, newParseError("expected second parameter for TRIANGULAR",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenVAR {
+		return nil, current, newParseError("expected second parameter for TRIANGULAR",
+			tokens[current-1].Position, nil)
 	}
-	x2Str := p.tokens[p.current].Value
-	x2, err := parseFloat(x2Str, p.tokens[p.current].Position)
+	x2Str := tokens[current].Value
+	x2, err := parseFloat(x2Str, tokens[current].Position)
 	if err != nil {
-		return nil, err
+		return nil, current, errors.WithStack(err)
 	}
-	p.current++
+	current++
 
 	// Expect comma
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenCOMMA {
-		return nil, newParseError("expected , between parameters",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenCOMMA {
+		return nil, current, newParseError("expected , between parameters",
+			tokens[current-1].Position, nil)
 	}
-	p.current++
+	current++
 
 	// Parse third parameter
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
-		return nil, newParseError("expected third parameter for TRIANGULAR",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenVAR {
+		return nil, current, newParseError("expected third parameter for TRIANGULAR",
+			tokens[current-1].Position, nil)
 	}
-	x3Str := p.tokens[p.current].Value
-	x3, err := parseFloat(x3Str, p.tokens[p.current].Position)
+	x3Str := tokens[current].Value
+	x3, err := parseFloat(x3Str, tokens[current].Position)
 	if err != nil {
-		return nil, err
+		return nil, current, errors.WithStack(err)
 	}
-	p.current++
+	current++
 
 	// Expect closing parenthesis
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenRPAREN {
-		return nil, newParseError("expected ) after TRIANGULAR parameters",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenRPAREN {
+		return nil, current, newParseError("expected ) after TRIANGULAR parameters",
+			tokens[current-1].Position, nil)
 	}
-	p.current++
+	current++
 
-	return fuzzy.Triangular(x1, x2, x3), nil
+	return fuzzy.Triangular(x1, x2, x3), current, nil
 }
 
-// parseTrapezoidFunction parses a TRAPEZOID(x1, x2, x3, x4) membership function
-func (p *Parser) parseTrapezoidFunction() (fuzzy.Membership, error) {
+// ParseTrapezoid parses a TRAPEZOID(x1, x2, x3, x4) membership function
+func ParseTrapezoid(tokens []Token, current int, parse ParseMembershipFunc) (fuzzy.Membership, int, error) {
 	// Expect open parenthesis
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenLPAREN {
-		return nil, newParseError("expected ( after TRAPEZOID",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenLPAREN {
+		return nil, current, newParseError("expected ( after TRAPEZOID",
+			tokens[current-1].Position, nil)
 	}
-	p.current++
+	current++
 
 	// Parse first parameter
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
-		return nil, newParseError("expected first parameter for TRAPEZOID",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenVAR {
+		return nil, current, newParseError("expected first parameter for TRAPEZOID",
+			tokens[current-1].Position, nil)
 	}
-	x1Str := p.tokens[p.current].Value
-	x1, err := parseFloat(x1Str, p.tokens[p.current].Position)
+	x1Str := tokens[current].Value
+	x1, err := parseFloat(x1Str, tokens[current].Position)
 	if err != nil {
-		return nil, err
+		return nil, current, errors.WithStack(err)
 	}
-	p.current++
+	current++
 
 	// Expect comma
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenCOMMA {
-		return nil, newParseError("expected , between parameters",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenCOMMA {
+		return nil, current, newParseError("expected , between parameters",
+			tokens[current-1].Position, nil)
 	}
-	p.current++
+	current++
 
 	// Parse second parameter
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
-		return nil, newParseError("expected second parameter for TRAPEZOID",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenVAR {
+		return nil, current, newParseError("expected second parameter for TRAPEZOID",
+			tokens[current-1].Position, nil)
 	}
-	x2Str := p.tokens[p.current].Value
-	x2, err := parseFloat(x2Str, p.tokens[p.current].Position)
+	x2Str := tokens[current].Value
+	x2, err := parseFloat(x2Str, tokens[current].Position)
 	if err != nil {
-		return nil, err
+		return nil, current, errors.WithStack(err)
 	}
-	p.current++
+	current++
 
 	// Expect comma
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenCOMMA {
-		return nil, newParseError("expected , between parameters",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenCOMMA {
+		return nil, current, newParseError("expected , between parameters",
+			tokens[current-1].Position, nil)
 	}
-	p.current++
+	current++
 
 	// Parse third parameter
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
-		return nil, newParseError("expected third parameter for TRAPEZOID",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenVAR {
+		return nil, current, newParseError("expected third parameter for TRAPEZOID",
+			tokens[current-1].Position, nil)
 	}
-	x3Str := p.tokens[p.current].Value
-	x3, err := parseFloat(x3Str, p.tokens[p.current].Position)
+	x3Str := tokens[current].Value
+	x3, err := parseFloat(x3Str, tokens[current].Position)
 	if err != nil {
-		return nil, err
+		return nil, current, errors.WithStack(err)
 	}
-	p.current++
+	current++
 
 	// Expect comma
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenCOMMA {
-		return nil, newParseError("expected , between parameters",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenCOMMA {
+		return nil, current, newParseError("expected , between parameters",
+			tokens[current-1].Position, nil)
 	}
-	p.current++
+	current++
 
 	// Parse fourth parameter
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenVAR {
-		return nil, newParseError("expected fourth parameter for TRAPEZOID",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenVAR {
+		return nil, current, newParseError("expected fourth parameter for TRAPEZOID",
+			tokens[current-1].Position, nil)
 	}
-	x4Str := p.tokens[p.current].Value
-	x4, err := parseFloat(x4Str, p.tokens[p.current].Position)
+	x4Str := tokens[current].Value
+	x4, err := parseFloat(x4Str, tokens[current].Position)
 	if err != nil {
-		return nil, err
+		return nil, current, errors.WithStack(err)
 	}
-	p.current++
+	current++
 
 	// Expect closing parenthesis
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenRPAREN {
-		return nil, newParseError("expected ) after TRAPEZOID parameters",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenRPAREN {
+		return nil, current, newParseError("expected ) after TRAPEZOID parameters",
+			tokens[current-1].Position, nil)
 	}
-	p.current++
+	current++
 
-	return fuzzy.Trapezoid(x1, x2, x3, x4), nil
+	return fuzzy.Trapezoid(x1, x2, x3, x4), current, nil
 }
 
-// parseInvertedFunction parses an INVERTED(function) membership function
-func (p *Parser) parseInvertedFunction() (fuzzy.Membership, error) {
+// ParseInverted parses an INVERTED(function) membership function
+func ParseInverted(tokens []Token, current int, parse ParseMembershipFunc) (fuzzy.Membership, int, error) {
 	// Expect open parenthesis
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenLPAREN {
-		return nil, newParseError("expected ( after INVERTED",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenLPAREN {
+		return nil, current, newParseError("expected ( after INVERTED",
+			tokens[current-1].Position, nil)
 	}
-	p.current++
+	current++
 
 	// Parse the inner membership function
-	innerFunc, err := p.parseMembershipFunction()
+	innerFunc, current, err := parse(tokens, current, parse)
 	if err != nil {
-		return nil, err
+		return nil, current, errors.WithStack(err)
 	}
 
 	// Expect closing parenthesis
-	if p.current >= len(p.tokens) || p.tokens[p.current].Type != tokenRPAREN {
-		return nil, newParseError("expected ) after INVERTED function",
-			p.tokens[p.current-1].Position, nil)
+	if current >= len(tokens) || tokens[current].Type != tokenRPAREN {
+		return nil, current, newParseError("expected ) after INVERTED function",
+			tokens[current-1].Position, nil)
 	}
-	p.current++
+	current++
 
-	return fuzzy.Inverted(innerFunc), nil
+	return fuzzy.Inverted(innerFunc), current, nil
 }
-
-// parseFloat is defined in parser.go and available within the package
