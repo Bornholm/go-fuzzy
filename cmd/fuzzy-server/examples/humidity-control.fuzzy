@@ -1,0 +1,21 @@
+// Humidity Control System
+// This example demonstrates a simple fuzzy logic system for controlling humidity
+
+// Define humidity variable
+DEFINE humidity (
+    TERM dry INVERTED ( LINEAR (0, 30) ),
+    TERM comfortable TRIANGULAR (20, 50, 80),
+    TERM humid LINEAR (70, 100)
+);
+
+// Define humidifier mode variable
+DEFINE humidifier_mode (
+    TERM high LINEAR (70, 100),
+    TERM low TRIANGULAR (20, 50, 80),
+    TERM off INVERTED ( LINEAR (0, 30) )
+);
+
+// Define rules
+IF humidity IS dry THEN humidifier_mode IS high;
+IF humidity IS comfortable THEN humidifier_mode IS low;
+IF humidity IS humid THEN humidifier_mode IS off;

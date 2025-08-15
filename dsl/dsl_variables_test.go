@@ -248,7 +248,7 @@ func TestVariablesAndRulesCombined(t *testing.T) {
 	}
 
 	// The ac_mode should be cooling with high truth degree
-	acMode := results.Best("ac_mode")
+	acMode, _ := results.Best("ac_mode")
 	t.Logf("Best ac_mode: %s with truth degree %f",
 		acMode.Term(), acMode.TruthDegree())
 	if acMode.Term() != "cooling" {
@@ -279,7 +279,7 @@ func TestVariablesAndRulesCombined(t *testing.T) {
 	}
 
 	// The ac_mode should be heating with high truth degree
-	acMode = results.Best("ac_mode")
+	acMode, _ = results.Best("ac_mode")
 	t.Logf("Best ac_mode: %s with truth degree %f",
 		acMode.Term(), acMode.TruthDegree())
 	if acMode.Term() != "heating" {

@@ -178,6 +178,8 @@ multiModal := fuzzy.Max(
 
 This library includes a DSL parser that allows you to define fuzzy rules using a simple text-based format instead of programmatic construction. This makes rule creation more intuitive and readable.
 
+You can see some examples in the [`./cmd/fuzzy/examples`](./cmd/fuzzy/examples) directory.
+
 ### Basic Syntax
 
 The basic syntax for a rule is:

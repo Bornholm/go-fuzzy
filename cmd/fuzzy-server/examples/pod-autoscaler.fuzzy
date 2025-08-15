@@ -1,0 +1,70 @@
+// Definition of a variable "resource_availability"
+// which represents the "quantity" (as a percentage) of "resources" (memory, CPU?) 
+// available on the infrastructure 
+// "low" represents a low quantity of available resources (< 25%)
+// "medium" represents a moderate quantity of available resources (between 15 and 65%, with a plateau between 30 and 50%)
+// "high" represents a high quantity of available resources (> 60%)
+DEFINE resource_availability (
+    TERM low LINEAR (25, 0),
+    TERM medium TRAPEZOID (15, 30, 50, 65),
+    TERM high LINEAR (60, 100)
+);
+
+// Definition of a variable "response_time_trend"
+// which represents the normalized trend of response time evolution
+// "degrading" represents a response time that is deteriorating (> 0.1)
+// "stable" represents a response time that remains stable (oscillates between -0.2 and 0.2)
+// "improving" represents a response time that is improving (< -0.1)
+DEFINE response_time_trend (
+    TERM degrading LINEAR (0.1, 1.0),
+    TERM stable TRIANGULAR (-0.2, 0, 0.2),
+    TERM improving LINEAR (-0.1, -1.0)
+);
+
+// Definition of a new variable "pod_count"
+// which represents the number of pods currently deployed
+// "low" represents a low number of pods, between 1 and 3,
+// "medium" represents a moderate number of pods, from 2 to 9 with a plateau between 4 and 7
+// "high" represents a high number of pods
+// (greater than 8, at 15 the state is considered as "particularly" true)
+DEFINE pod_count (
+    TERM low LINEAR (3, 1),
+    TERM medium TRAPEZOID (2, 4, 7, 9),
+    TERM high LINEAR (8, 15)
+);
+
+// Definition of the action "scale_action" with 3 possible states:
+// "down" - we should reduce the number of pods
+// "hold" - we do nothing
+// "up" - we should increase the number of pods
+DEFINE scale_action (
+    TERM down LINEAR (-50, -100),
+    TERM hold TRIANGULAR (-60, 0, 60),
+    TERM up LINEAR (50, 100)
+);
+
+// If the infrastructure still has resources available
+// AND the response time is degrading
+// AND the current number of pods is not high
+// THEN we increase the number of pods
+IF ( resource_availability IS high OR resource_availability IS medium ) AND response_time_trend IS degrading AND NOT pod_count IS high THEN scale_action IS up;
+
+// If the response time is stable
+// AND the number of pods is medium or low
+// THEN we don't modify the number of pods
+IF response_time_trend IS stable AND ( pod_count IS medium OR pod_count IS low ) THEN scale_action IS hold;
+
+// IF the response time is stable OR it is improving
+// AND the number of pods is high
+// THEN we decrease the number of pods
+IF ( response_time_trend IS stable OR response_time_trend IS improving ) AND pod_count IS high THEN scale_action IS down;
+
+// IF the response time is improving
+// AND the number of pods is medium
+// THEN we decrease the number of pods
+IF response_time_trend IS improving AND pod_count IS medium THEN scale_action IS down;
+
+// IF the quantity of available resources is low
+// AND the response time is degrading
+// THEN we don't modify the number of pods
+IF resource_availability IS low AND response_time_trend IS degrading THEN scale_action IS hold;

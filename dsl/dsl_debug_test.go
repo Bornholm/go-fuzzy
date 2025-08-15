@@ -90,7 +90,7 @@ func TestDebugParseWithComments(t *testing.T) {
 		}
 
 		// The ac_mode should have a value
-		acMode := results.Best("ac_mode")
+		acMode, _ := results.Best("ac_mode")
 		t.Logf("Rule %d: Best ac_mode: %s with truth degree %f",
 			i+1, acMode.Term(), acMode.TruthDegree())
 	}
@@ -114,7 +114,7 @@ func TestDebugParseWithComments(t *testing.T) {
 	}
 
 	// The ac_mode should be heating
-	acMode := results.Best("ac_mode")
+	acMode, _ := results.Best("ac_mode")
 	t.Logf("All rules: Best ac_mode: %s with truth degree %f",
 		acMode.Term(), acMode.TruthDegree())
 	if acMode.Term() != "heating" {

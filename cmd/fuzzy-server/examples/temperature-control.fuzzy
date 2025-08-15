@@ -1,0 +1,21 @@
+// Temperature Control System
+// This example demonstrates a simple fuzzy logic system for controlling AC based on temperature
+
+// Define temperature variable
+DEFINE temperature (
+    TERM cold LINEAR (10, -10),
+    TERM comfortable TRAPEZOID (5, 18, 22, 25),
+    TERM hot LINEAR (20, 30)
+);
+
+// Define AC mode variable
+DEFINE ac_mode (
+    TERM heating LINEAR (0, 100),
+    TERM off TRIANGULAR (-50, 0, 50),
+    TERM cooling LINEAR(0, -100)
+);
+
+// Define rules
+IF temperature IS cold THEN ac_mode IS heating;
+IF temperature IS comfortable THEN ac_mode IS off;
+IF temperature IS hot THEN ac_mode IS cooling;

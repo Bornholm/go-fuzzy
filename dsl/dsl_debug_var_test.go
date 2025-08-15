@@ -100,7 +100,7 @@ func TestDebugVariableDefinitionsWithComments(t *testing.T) {
 		t.Logf("INFERENCE ERROR: %v", err)
 		// Continue so we can see debug output
 	} else {
-		acMode := results.Best("ac_mode")
+		acMode, _ := results.Best("ac_mode")
 		t.Logf("Best ac_mode: %s with truth degree %f", acMode.Term(), acMode.TruthDegree())
 	}
 }

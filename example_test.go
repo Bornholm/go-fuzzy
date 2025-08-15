@@ -69,7 +69,7 @@ func ExampleEngine() {
 	fmt.Printf("AC Mode value: %.2f\n", acMode)
 
 	// Get the best matching term
-	bestMatch := results.Best("ac_mode")
+	bestMatch, _ := results.Best("ac_mode")
 	fmt.Printf("AC Mode: %s (truth degree: %.2f)\n", bestMatch.Term(), bestMatch.TruthDegree())
 
 	// Output: Temperature: 30.0°C

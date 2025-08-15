@@ -232,11 +232,11 @@ func dumpResult(engine *fuzzy.Engine, results fuzzy.Results, variable string, lo
 
 	sort.Strings(keys)
 
-	best := results.Best(variable)
+	best, hasBest := results.Best(variable)
 
 	for _, term := range keys {
 		isBest := ""
-		if best.Term() == term {
+		if hasBest && best.Term() == term {
 			isBest = "(best)"
 		}
 		res := variableResults[term]

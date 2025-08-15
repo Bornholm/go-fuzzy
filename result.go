@@ -4,16 +4,20 @@ import "sort"
 
 type Results map[string]map[string]Result
 
-func (r Results) Best(variable string) Result {
-	var best Result
+func (r Results) Best(variable string) (*Result, bool) {
+	var best *Result
 
 	for _, res := range r[variable] {
-		if res.TruthDegree() > best.TruthDegree() {
-			best = res
+		if best == nil || res.TruthDegree() > best.TruthDegree() {
+			best = &res
 		}
 	}
 
-	return best
+	if best == nil || best.TruthDegree() == 0 {
+		return nil, false
+	}
+
+	return best, true
 }
 
 func (r Results) Variables() []string {

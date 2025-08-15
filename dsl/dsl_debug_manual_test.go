@@ -50,7 +50,7 @@ func TestDebugManualSetup(t *testing.T) {
 
 	// Set up the engine completely manually to match setupTestEngine
 	engine := fuzzy.NewEngine(fuzzy.Centroid(100))
-	
+
 	// Add all standard variables used in the tests (from setupTestEngine)
 	engine.Variables(
 		fuzzy.NewVariable(
@@ -91,8 +91,8 @@ func TestDebugManualSetup(t *testing.T) {
 
 	// Create inputs with all possible variables
 	inputs := fuzzy.Values{
-		"temperature": 25, // hot
-		"humidity":    80, // high
+		"temperature": 25,  // hot
+		"humidity":    80,  // high
 		"pressure":    100, // not low (in case it's needed)
 	}
 
@@ -105,6 +105,6 @@ func TestDebugManualSetup(t *testing.T) {
 	}
 
 	// Should get cooling due to humidity IS high rule
-	acMode := results.Best("ac_mode")
+	acMode, _ := results.Best("ac_mode")
 	t.Logf("Best ac_mode: %s with truth degree %f", acMode.Term(), acMode.TruthDegree())
 }

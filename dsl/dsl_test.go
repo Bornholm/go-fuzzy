@@ -66,7 +66,7 @@ func TestParseRuleWithAnd(t *testing.T) {
 	}
 
 	// The ac_mode should be heating with high truth degree
-	acMode := results.Best("ac_mode")
+	acMode, _ := results.Best("ac_mode")
 	if acMode.Term() != "heating" {
 		t.Errorf("Expected ac_mode to be heating, got %s", acMode.Term())
 	}
@@ -104,7 +104,7 @@ func TestParseRuleWithOr(t *testing.T) {
 	}
 
 	// The ac_mode should still be heating due to low humidity
-	acMode := results.Best("ac_mode")
+	acMode, _ := results.Best("ac_mode")
 	if acMode.Term() != "heating" {
 		t.Errorf("Expected ac_mode to be heating, got %s", acMode.Term())
 	}
@@ -141,7 +141,7 @@ func TestParseRuleWithNot(t *testing.T) {
 	}
 
 	// The ac_mode should be heating with high truth degree
-	acMode := results.Best("ac_mode")
+	acMode, _ := results.Best("ac_mode")
 	if acMode.Term() != "heating" {
 		t.Errorf("Expected ac_mode to be heating, got %s", acMode.Term())
 	}
@@ -182,12 +182,12 @@ func TestParseRuleWithSimpleNot(t *testing.T) {
 	}
 
 	// Debug: Print results
-	debugAcMode := results.Best("ac_mode")
+	debugAcMode, _ := results.Best("ac_mode")
 	t.Logf("Best ac_mode: %s with truth degree %f",
 		debugAcMode.Term(), debugAcMode.TruthDegree())
 
 	// The ac_mode should be heating with high truth degree
-	acMode := results.Best("ac_mode")
+	acMode, _ := results.Best("ac_mode")
 	if acMode.Term() != "heating" {
 		t.Errorf("Expected ac_mode to be heating, got %s", acMode.Term())
 	}
@@ -230,12 +230,12 @@ func TestParseRuleWithParentheses(t *testing.T) {
 	}
 
 	// Debug: Print results
-	debugAcMode := results.Best("ac_mode")
+	debugAcMode, _ := results.Best("ac_mode")
 	t.Logf("Best ac_mode: %s with truth degree %f",
 		debugAcMode.Term(), debugAcMode.TruthDegree())
 
 	// The ac_mode should be heating with high truth degree
-	acMode := results.Best("ac_mode")
+	acMode, _ := results.Best("ac_mode")
 	if acMode.Term() != "heating" {
 		t.Errorf("Expected ac_mode to be heating, got %s", acMode.Term())
 	}
@@ -395,7 +395,7 @@ func TestParseWithComments(t *testing.T) {
 	}
 
 	// The ac_mode should be heating
-	acMode := results.Best("ac_mode")
+	acMode, _ := results.Best("ac_mode")
 	if acMode.Term() != "heating" {
 		t.Errorf("Expected ac_mode to be heating, got %s", acMode.Term())
 	}
@@ -484,7 +484,7 @@ func TestVariableDefinitionsWithComments(t *testing.T) {
 	}
 
 	// The ac_mode should be cooling due to hot temperature
-	acMode := results.Best("ac_mode")
+	acMode, _ := results.Best("ac_mode")
 	if acMode.Term() != "cooling" {
 		t.Errorf("Expected ac_mode to be cooling, got %s", acMode.Term())
 	}
@@ -615,7 +615,7 @@ func ExampleParseRules() {
 	}
 
 	// Get the best matching term
-	bestMatch := results.Best("ac_mode")
+	bestMatch, _ := results.Best("ac_mode")
 	fmt.Printf("AC Mode: %s (truth degree: %.2f)\n", bestMatch.Term(), bestMatch.TruthDegree())
 	// Output: AC Mode: cooling (truth degree: 1.00)
 }

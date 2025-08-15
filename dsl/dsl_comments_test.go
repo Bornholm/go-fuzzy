@@ -97,7 +97,7 @@ func TestCommentHandling(t *testing.T) {
 
 		// Setup the engine
 		engine := fuzzy.NewEngine(fuzzy.Centroid(100))
-		
+
 		// Define variables
 		engine.Variables(
 			fuzzy.NewVariable(
@@ -111,7 +111,7 @@ func TestCommentHandling(t *testing.T) {
 				fuzzy.NewTerm("cooling", fuzzy.Inverted(fuzzy.Linear(-100, 0))),
 			),
 		)
-		
+
 		// Add rules
 		engine.Rules(rules...)
 
@@ -119,10 +119,10 @@ func TestCommentHandling(t *testing.T) {
 		inputs := fuzzy.Values{
 			"temperature": 0, // cold
 		}
-		
+
 		// Log the inputs for debugging
 		t.Logf("Inference inputs: %v", inputs)
-		
+
 		// Run inference
 		results, err := engine.Infer(inputs)
 		if err != nil {
@@ -130,9 +130,9 @@ func TestCommentHandling(t *testing.T) {
 		}
 
 		// Check the results
-		acMode := results.Best("ac_mode")
+		acMode, _ := results.Best("ac_mode")
 		t.Logf("Best ac_mode: %s with truth degree %f", acMode.Term(), acMode.TruthDegree())
-		
+
 		if acMode.Term() != "heating" {
 			t.Errorf("Expected ac_mode to be heating, got %s", acMode.Term())
 		}
